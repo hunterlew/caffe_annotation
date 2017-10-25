@@ -55,17 +55,24 @@ class Layer;
 template <typename Dtype>
 class LayerRegistry {
  public:
+  // *creator指的是函数指针，指向的函数以LayerParameter类型为参数，
+  // 并返回shared_ptr<Layer<Dtype> >类型
   typedef shared_ptr<Layer<Dtype> > (*Creator)(const LayerParameter&);
+  // map类型，每一种层类型type对应要给creator函数指针，理解为注册表
   typedef std::map<string, Creator> CreatorRegistry;
 
+  // 新建注册表
   static CreatorRegistry& Registry() {
+    // 注意static，只执行一次并放在静态区
     static CreatorRegistry* g_registry_ = new CreatorRegistry();
     return *g_registry_;
   }
 
   // Adds a creator.
+  // 确保相同类型只注册一次，因为每种层对应的构造函数是一样的，只是参数不一样
   static void AddCreator(const string& type, Creator creator) {
     CreatorRegistry& registry = Registry();
+    // 判断是否第一次注册，否则输出“已经注册”信息
     CHECK_EQ(registry.count(type), 0)
         << "Layer type " << type << " already registered.";
     registry[type] = creator;
@@ -78,11 +85,14 @@ class LayerRegistry {
     }
     const string& type = param.type();
     CreatorRegistry& registry = Registry();
+    // 判断创建的层是否在注册表里，找不到则输出“未知类型，已知的类型有。。。”信息
     CHECK_EQ(registry.count(type), 1) << "Unknown layer type: " << type
         << " (known types: " << LayerTypeListString() << ")";
+    // 调用creator指针指向的函数，该函数将以param为参数
     return registry[type](param);
   }
 
+  // 列举注册表中的层类型
   static vector<string> LayerTypeList() {
     CreatorRegistry& registry = Registry();
     vector<string> layer_types;
@@ -98,6 +108,7 @@ class LayerRegistry {
   // static variables.
   LayerRegistry() {}
 
+  // 打印注册表中的层类型，用逗号隔开
   static string LayerTypeListString() {
     vector<string> layer_types = LayerTypeList();
     string layer_types_str;
@@ -116,6 +127,7 @@ class LayerRegistry {
 template <typename Dtype>
 class LayerRegisterer {
  public:
+  // 构造函数，参数为层类型字符串和函数指针 
   LayerRegisterer(const string& type,
                   shared_ptr<Layer<Dtype> > (*creator)(const LayerParameter&)) {
     // LOG(INFO) << "Registering layer type: " << type;
@@ -123,7 +135,9 @@ class LayerRegisterer {
   }
 };
 
-
+// 宏定义，可以多行，最后的不用分号
+// 宏定义中#表示将宏的参数字符串化（LayerRegisterer第一个参数是string类型）
+// ##则表示符号的连接
 #define REGISTER_LAYER_CREATOR(type, creator)                                  \
   static LayerRegisterer<float> g_creator_f_##type(#type, creator<float>);     \
   static LayerRegisterer<double> g_creator_d_##type(#type, creator<double>)    \

@@ -41,6 +41,7 @@ class Layer {
     : layer_param_(param) {
       // Set phase and copy blobs (if there are any).
       phase_ = param.phase();
+      // 如果该层包含参数，则拷贝到blobs_中
       if (layer_param_.blobs_size() > 0) {
         blobs_.resize(layer_param_.blobs_size());
         for (int i = 0; i < layer_param_.blobs_size(); ++i) {
@@ -88,6 +89,7 @@ class Layer {
    * <code>Reshape</code>, which will be called before the forward pass to
    * adjust the top blob sizes.
    */
+  // 虚函数，设置各个层的初始化
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {}
 
@@ -103,6 +105,7 @@ class Layer {
    * and making any other necessary adjustments so that the layer can
    * accommodate the bottom blobs.
    */
+  // 纯虚函数，必须实现，调整输出blob以便适应输入
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) = 0;
 
@@ -292,21 +295,29 @@ class Layer {
   }
 
 
- protected:
+ protected: // 子类可以访问；不能用private属性，子类无法继承
   /** The protobuf that stores the layer parameters */
+  // 层的参数
   LayerParameter layer_param_;
   /** The phase: TRAIN or TEST */
+  // 训练or测试
   Phase phase_;
   /** The vector that stores the learnable parameters as a set of blobs. */
+  // 该层的权重参数
   vector<shared_ptr<Blob<Dtype> > > blobs_;
   /** Vector indicating whether to compute the diff of each param blob. */
+  // 各个权重参数blob是否需要计算导数
   vector<bool> param_propagate_down_;
 
   /** The vector that indicates whether each top blob has a non-zero weight in
    *  the objective function. */
+  // 用于loss层，多输出情形下，各个输出对loss的贡献权重
+  // 对于非loss层，默认0；对于loss层，默认1
   vector<Dtype> loss_;
 
+  // protected 成员函数， 由本类的public成员函数调用，本身无需对外开放
   /** @brief Using the CPU device, compute the layer output. */
+  // 纯虚函数，子类必须实现cpu前向传播
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) = 0;
   /**
@@ -323,6 +334,7 @@ class Layer {
    * @brief Using the CPU device, compute the gradients for any parameters and
    *        for the bottom blobs if propagate_down is true.
    */
+  // 纯虚函数，子类必须实现gpu前向传播
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down,
       const vector<Blob<Dtype>*>& bottom) = 0;
@@ -396,32 +408,38 @@ class Layer {
         if (loss_weight == Dtype(0)) { continue; }
         this->set_loss(top_id, loss_weight);
         const int count = top[top_id]->count();
-        Dtype* loss_multiplier = top[top_id]->mutable_cpu_diff();
-        caffe_set(count, loss_weight, loss_multiplier);
+        Dtype* loss_multiplier = top[top_id]->mutable_cpu_diff(); 
+        caffe_set(count, loss_weight, loss_multiplier); // 权重拷贝给diff数据。在反向传播时用到
       }
     }
   }
 
  private:
+  // 带参数的宏定义
+  // 不提供复制构造函数和赋值构造函数
   DISABLE_COPY_AND_ASSIGN(Layer);
 };  // class Layer
 
 // Forward and backward wrappers. You should implement the cpu and
 // gpu specific implementations instead, and should not change these
 // functions.
+// bottom是输入，top是输出
 template <typename Dtype>
 inline Dtype Layer<Dtype>::Forward(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   Dtype loss = 0;
+  // 调整输出大小以适应输入
   Reshape(bottom, top);
   switch (Caffe::mode()) {
   case Caffe::CPU:
     Forward_cpu(bottom, top);
     for (int top_id = 0; top_id < top.size(); ++top_id) {
+      // 如果为0，说明非loss层，无需计算loss
       if (!this->loss(top_id)) { continue; }
       const int count = top[top_id]->count();
       const Dtype* data = top[top_id]->cpu_data();
       const Dtype* loss_weights = top[top_id]->cpu_diff();
+      // 点乘，将top输出乘以权重，权重之前的SetLossWeights已经保存在loss_weights中
       loss += caffe_cpu_dot(count, data, loss_weights);
     }
     break;

@@ -34,6 +34,8 @@
 namespace caffe {
 
 // Get convolution layer according to engine.
+// 参数为LayerParameter类型，返回shared_ptr<Layer<Dtype> >，符合creator函数指针
+// shared_ptr<Layer<Dtype> >相当于返回指向layer类型的指针
 template <typename Dtype>
 shared_ptr<Layer<Dtype> > GetConvolutionLayer(
     const LayerParameter& param) {
@@ -70,7 +72,7 @@ shared_ptr<Layer<Dtype> > GetConvolutionLayer(
     throw;  // Avoids missing return warning
   }
 }
-
+// 注册
 REGISTER_LAYER_CREATOR(Convolution, GetConvolutionLayer);
 
 // Get pooling layer according to engine.
@@ -264,4 +266,5 @@ REGISTER_LAYER_CREATOR(Python, GetPythonLayer);
 
 // Layers that use their constructor as their default creator should be
 // registered in their corresponding cpp files. Do not register them here.
+// 通过默认构造函数注册的应该在各个层的cpp文件中注册，不要在该文件中注册。
 }  // namespace caffe
