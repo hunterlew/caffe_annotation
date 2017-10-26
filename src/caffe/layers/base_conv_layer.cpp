@@ -8,21 +8,29 @@
 
 namespace caffe {
 
+// 初始化操作，例如维度的计算，权值的初始化等
 template <typename Dtype>
 void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   // Configure the kernel size, padding, stride, and inputs.
   ConvolutionParameter conv_param = this->layer_param_.convolution_param();
   force_nd_im2col_ = conv_param.force_nd_im2col();
+  // 通道是第几维
   channel_axis_ = bottom[0]->CanonicalAxisIndex(conv_param.axis());
+  // 通道对应维数的下一维是空间维，对于[n c h w]，为2
   const int first_spatial_axis = channel_axis_ + 1;
+  // 输入维数
   const int num_axes = bottom[0]->num_axes();
+  // 执行卷积的维数，4 - 2 = 2
   num_spatial_axes_ = num_axes - first_spatial_axis;
   CHECK_GE(num_spatial_axes_, 0);
+  // 大小为1，值为max(num_spatial_axes_, 1)的向量
   vector<int> spatial_dim_blob_shape(1, std::max(num_spatial_axes_, 1));
   // Setup filter kernel dimensions (kernel_shape_).
+  // 根据卷积维数初始化核的维度
   kernel_shape_.Reshape(spatial_dim_blob_shape);
   int* kernel_shape_data = kernel_shape_.mutable_cpu_data();
+  // 根据卷积的维数，将核各个维度的大小付给kernel_shape_
   if (conv_param.has_kernel_h() || conv_param.has_kernel_w()) {
     CHECK_EQ(num_spatial_axes_, 2)
         << "kernel_h & kernel_w can only be used for 2D convolution.";
@@ -41,9 +49,11 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
             conv_param.kernel_size((num_kernel_dims == 1) ? 0 : i);
       }
   }
+  // 各维的大小都是正数
   for (int i = 0; i < num_spatial_axes_; ++i) {
     CHECK_GT(kernel_shape_data[i], 0) << "Filter dimensions must be nonzero.";
   }
+  // 同理，根据卷积维数，初始化设置卷积的其它参数
   // Setup stride dimensions (stride_).
   stride_.Reshape(spatial_dim_blob_shape);
   int* stride_data = stride_.mutable_cpu_data();
@@ -107,6 +117,7 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   }
   // Special case: im2col is the identity for 1x1 convolution with stride 1
   // and no padding, so flag for skipping the buffer and transformation.
+  // 1*1卷积的情况做个标志
   is_1x1_ = true;
   for (int i = 0; i < num_spatial_axes_; ++i) {
     is_1x1_ &=
@@ -114,13 +125,17 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     if (!is_1x1_) { break; }
   }
   // Configure output channels and groups.
+  // 输入通道数
   channels_ = bottom[0]->shape(channel_axis_);
+  // 输出通道数
   num_output_ = this->layer_param_.convolution_param().num_output();
   CHECK_GT(num_output_, 0);
+  // 分组卷积，需要整除
   group_ = this->layer_param_.convolution_param().group();
   CHECK_EQ(channels_ % group_, 0);
   CHECK_EQ(num_output_ % group_, 0)
       << "Number of output should be multiples of group.";
+  // 是否为反卷积
   if (reverse_dimensions()) {
     conv_out_channels_ = channels_;
     conv_in_channels_ = num_output_;
@@ -131,23 +146,34 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   // Handle the parameters: weights and biases.
   // - blobs_[0] holds the filter weights
   // - blobs_[1] holds the biases (optional)
+  // 由layer类继承而来的blobs_属性，保存参数
+  // blobs_[0]保存权重，blobs_[1]保存偏置
+  // 设置blobs_[0]
   vector<int> weight_shape(2);
+  // 最终weight_shape为[num_output_channel num_input_channel k_h k_w]
   weight_shape[0] = conv_out_channels_;
   weight_shape[1] = conv_in_channels_ / group_;
   for (int i = 0; i < num_spatial_axes_; ++i) {
     weight_shape.push_back(kernel_shape_data[i]);
   }
+  // 是否设置偏置项，0或1
   bias_term_ = this->layer_param_.convolution_param().bias_term();
+  // 设置blobs_[1]，共bias_term_个元素，每个设置为num_output_
+  // 最终bias_shape为[num_output_channel]
   vector<int> bias_shape(bias_term_, num_output_);
+  // 刚开始blobs_为空，运行else中的
   if (this->blobs_.size() > 0) {
+    // 判断blobs_维度是否正确
     CHECK_EQ(1 + bias_term_, this->blobs_.size())
         << "Incorrect number of weight blobs.";
+    // 判断blobs_[0]维度是否正确
     if (weight_shape != this->blobs_[0]->shape()) {
       Blob<Dtype> weight_shaped_blob(weight_shape);
       LOG(FATAL) << "Incorrect weight shape: expected shape "
           << weight_shaped_blob.shape_string() << "; instead, shape was "
           << this->blobs_[0]->shape_string();
     }
+    // 判断blobs_[1]维度是否正确
     if (bias_term_ && bias_shape != this->blobs_[1]->shape()) {
       Blob<Dtype> bias_shaped_blob(bias_shape);
       LOG(FATAL) << "Incorrect bias shape: expected shape "
@@ -163,11 +189,14 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     }
     // Initialize and fill the weights:
     // output channels x input channels per-group x kernel height x kernel width
+    // 初始化权重
     this->blobs_[0].reset(new Blob<Dtype>(weight_shape));
     shared_ptr<Filler<Dtype> > weight_filler(GetFiller<Dtype>(
         this->layer_param_.convolution_param().weight_filler()));
+    // 各种filter对应的fill方法，生成初始化参数值
     weight_filler->Fill(this->blobs_[0].get());
     // If necessary, initialize and fill the biases.
+    // 填充偏置值
     if (bias_term_) {
       this->blobs_[1].reset(new Blob<Dtype>(bias_shape));
       shared_ptr<Filler<Dtype> > bias_filler(GetFiller<Dtype>(
@@ -175,12 +204,14 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       bias_filler->Fill(this->blobs_[1].get());
     }
   }
+  // 为k_h * k_w
   kernel_dim_ = this->blobs_[0]->count(1);
   weight_offset_ = conv_out_channels_ * kernel_dim_ / group_;
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), true);
 }
 
+// 输出维度设置等
 template <typename Dtype>
 void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
@@ -191,6 +222,7 @@ void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   CHECK_EQ(bottom[0]->shape(channel_axis_), channels_)
       << "Input size incompatible with convolution kernel.";
   // TODO: generalize to handle inputs of different shapes.
+  // 多输入情况下，维度需要相同？
   for (int bottom_id = 1; bottom_id < bottom.size(); ++bottom_id) {
     CHECK(bottom[0]->shape() == bottom[bottom_id]->shape())
         << "All inputs must have the same shape.";
@@ -198,12 +230,16 @@ void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   // Shape the tops.
   bottom_shape_ = &bottom[0]->shape();
   compute_output_shape();
+  // 将输入的维度[n]作为初始值初始化top_shape
   vector<int> top_shape(bottom[0]->shape().begin(),
       bottom[0]->shape().begin() + channel_axis_);
+  // [n c]
   top_shape.push_back(num_output_);
+  // [n c h w]
   for (int i = 0; i < num_spatial_axes_; ++i) {
     top_shape.push_back(output_shape_[i]);
   }
+  // reshape成合适的输出维度
   for (int top_id = 0; top_id < top.size(); ++top_id) {
     top[top_id]->Reshape(top_shape);
   }
@@ -212,10 +248,12 @@ void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   } else {
     conv_out_spatial_dim_ = top[0]->count(first_spatial_axis);
   }
+  // 对应im2col中的设定，对应每个输入的offset
   col_offset_ = kernel_dim_ * conv_out_spatial_dim_;
   output_offset_ = conv_out_channels_ * conv_out_spatial_dim_ / group_;
   // Setup input dimensions (conv_input_shape_).
   vector<int> bottom_dim_blob_shape(1, num_spatial_axes_ + 1);
+  // 以size()作为reshape，即3个维度[c h w]
   conv_input_shape_.Reshape(bottom_dim_blob_shape);
   int* conv_input_shape_data = conv_input_shape_.mutable_cpu_data();
   for (int i = 0; i < num_spatial_axes_ + 1; ++i) {
@@ -237,12 +275,15 @@ void BaseConvolutionLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       col_buffer_shape_.push_back(output_shape_[i]);
     }
   }
+  // [k_h*k_w h w]
   col_buffer_.Reshape(col_buffer_shape_);
+  // c * h * w
   bottom_dim_ = bottom[0]->count(channel_axis_);
   top_dim_ = top[0]->count(channel_axis_);
   num_kernels_im2col_ = conv_in_channels_ * conv_out_spatial_dim_;
   num_kernels_col2im_ = reverse_dimensions() ? top_dim_ : bottom_dim_;
   // Set up the all ones "bias multiplier" for adding biases by BLAS
+  // h*w
   out_spatial_dim_ = top[0]->count(first_spatial_axis);
   if (bias_term_) {
     vector<int> bias_multiplier_shape(1, out_spatial_dim_);
@@ -258,11 +299,13 @@ void BaseConvolutionLayer<Dtype>::forward_cpu_gemm(const Dtype* input,
   const Dtype* col_buff = input;
   if (!is_1x1_) {
     if (!skip_im2col) {
+      // 转化为col形式
       conv_im2col_cpu(input, col_buffer_.mutable_cpu_data());
     }
     col_buff = col_buffer_.cpu_data();
   }
   for (int g = 0; g < group_; ++g) {
+    // 转化为矩阵相乘
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, conv_out_channels_ /
         group_, conv_out_spatial_dim_, kernel_dim_,
         (Dtype)1., weights + weight_offset_ * g, col_buff + col_offset_ * g,

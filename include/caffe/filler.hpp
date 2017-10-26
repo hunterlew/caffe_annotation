@@ -15,11 +15,13 @@
 namespace caffe {
 
 /// @brief Fills a Blob with constant or randomly-generated data.
+// Filler是个随机数生成器，用于参数初始化
 template <typename Dtype>
 class Filler {
  public:
   explicit Filler(const FillerParameter& param) : filler_param_(param) {}
   virtual ~Filler() {}
+  // 纯虚函数
   virtual void Fill(Blob<Dtype>* blob) = 0;
  protected:
   FillerParameter filler_param_;
@@ -149,6 +151,7 @@ class XavierFiller : public Filler<Dtype> {
     CHECK(blob->count());
     int fan_in = blob->count() / blob->num();
     int fan_out = blob->count() / blob->channels();
+    // n的选择
     Dtype n = fan_in;  // default to fan_in
     if (this->filler_param_.variance_norm() ==
         FillerParameter_VarianceNorm_AVERAGE) {
@@ -157,6 +160,7 @@ class XavierFiller : public Filler<Dtype> {
         FillerParameter_VarianceNorm_FAN_OUT) {
       n = fan_out;
     }
+    // 均匀分布参数
     Dtype scale = sqrt(Dtype(3) / n);
     caffe_rng_uniform<Dtype>(blob->count(), -scale, scale,
         blob->mutable_cpu_data());
@@ -199,6 +203,7 @@ class MSRAFiller : public Filler<Dtype> {
         FillerParameter_VarianceNorm_FAN_OUT) {
       n = fan_out;
     }
+    // 标准差参数
     Dtype std = sqrt(Dtype(2) / n);
     caffe_rng_gaussian<Dtype>(blob->count(), Dtype(0), std,
         blob->mutable_cpu_data());
@@ -267,6 +272,7 @@ class BilinearFiller : public Filler<Dtype> {
  * Ideally this would be replaced by a factory pattern, but we will leave it
  * this way for now.
  */
+// 返回各种权值初始化方法的Filler
 template <typename Dtype>
 Filler<Dtype>* GetFiller(const FillerParameter& param) {
   const std::string& type = param.type();
