@@ -303,10 +303,10 @@ class Layer {
   // 训练or测试
   Phase phase_;
   /** The vector that stores the learnable parameters as a set of blobs. */
-  // 该层的权重参数
+  // 该层的权重参数，包括权重和偏置
   vector<shared_ptr<Blob<Dtype> > > blobs_;
   /** Vector indicating whether to compute the diff of each param blob. */
-  // 各个blob是否需要反向传播
+  // 是否计算该层权重和偏置的导数
   vector<bool> param_propagate_down_;
 
   /** The vector that indicates whether each top blob has a non-zero weight in

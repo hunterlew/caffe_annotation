@@ -29,6 +29,7 @@ class PoolingLayer : public Layer<Dtype> {
   virtual inline int MinTopBlobs() const { return 1; }
   // MAX POOL layers can output an extra top blob for the mask;
   // others can only output the pooled inputs.
+  // 对于最大池化，允许输出标记位置的掩膜，可以输出两个blob
   virtual inline int MaxTopBlobs() const {
     return (this->layer_param_.pooling_param().pool() ==
             PoolingParameter_PoolMethod_MAX) ? 2 : 1;
@@ -50,6 +51,7 @@ class PoolingLayer : public Layer<Dtype> {
   int channels_;
   int height_, width_;
   int pooled_height_, pooled_width_;
+  // 是否为全局均值池化
   bool global_pooling_;
   Blob<Dtype> rand_idx_;
   Blob<int> max_idx_;

@@ -17,6 +17,7 @@ namespace caffe {
  *
  * TODO(dox): thorough documentation for Forward and proto params.
  */
+// 基础数据层，作为data类的父类
 template <typename Dtype>
 class BaseDataLayer : public Layer<Dtype> {
  public:
@@ -28,7 +29,7 @@ class BaseDataLayer : public Layer<Dtype> {
       const vector<Blob<Dtype>*>& top);
   virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {}
-  // Data layers have no bottoms, so reshaping is trivial.
+  // Data layers have no bottoms, so reshaping is trivial.  // 不重要的
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {}
 
@@ -46,6 +47,7 @@ class BaseDataLayer : public Layer<Dtype> {
 template <typename Dtype>
 class Batch {
  public:
+  // 一个数据及标签
   Blob<Dtype> data_, label_;
 };
 
@@ -74,6 +76,7 @@ class BasePrefetchingDataLayer :
   BlockingQueue<Batch<Dtype>*> prefetch_full_;
   Batch<Dtype>* prefetch_current_;
 
+  // 经预处理后的输入？
   Blob<Dtype> transformed_data_;
 };
 

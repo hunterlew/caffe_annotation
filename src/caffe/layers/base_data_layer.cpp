@@ -23,9 +23,11 @@ void BaseDataLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   if (top.size() == 1) {
     output_labels_ = false;
   } else {
+    // 可以两个输出，输出label
     output_labels_ = true;
   }
   data_transformer_.reset(
+    // data_transformer类
       new DataTransformer<Dtype>(transform_param_, this->phase_));
   data_transformer_->InitRand();
   // The subclasses should setup the size of bottom and top
@@ -116,6 +118,7 @@ void BasePrefetchingDataLayer<Dtype>::Forward_cpu(
     prefetch_free_.push(prefetch_current_);
   }
   prefetch_current_ = prefetch_full_.pop("Waiting for data");
+  // 载入data和label，分别给top[0]和top[1]
   // Reshape to loaded data.
   top[0]->ReshapeLike(prefetch_current_->data_);
   top[0]->set_cpu_data(prefetch_current_->data_.mutable_cpu_data());

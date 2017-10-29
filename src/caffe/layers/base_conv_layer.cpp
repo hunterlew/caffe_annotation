@@ -328,6 +328,7 @@ void BaseConvolutionLayer<Dtype>::backward_cpu_gemm(const Dtype* output,
   if (is_1x1_) {
     col_buff = input;
   }
+  // 注意反向的计算，需要转置
   for (int g = 0; g < group_; ++g) {
     caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, kernel_dim_,
         conv_out_spatial_dim_, conv_out_channels_ / group_,

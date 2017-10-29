@@ -10,18 +10,22 @@ namespace caffe {
 using std::min;
 using std::max;
 
+// 设置池化参数
 template <typename Dtype>
 void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   PoolingParameter pool_param = this->layer_param_.pooling_param();
+  // 如果设置全局池化，不应该设置池化大小，只取决于输入map的大小
   if (pool_param.global_pooling()) {
     CHECK(!(pool_param.has_kernel_size() ||
       pool_param.has_kernel_h() || pool_param.has_kernel_w()))
       << "With Global_pooling: true Filter size cannot specified";
   } else {
+    // 不能既设置kernel_size又同时设置k_h和k_w
     CHECK(!pool_param.has_kernel_size() !=
       !(pool_param.has_kernel_h() && pool_param.has_kernel_w()))
       << "Filter size is kernel_size OR kernel_h and kernel_w; not both";
+    // 如果是kernel_size，则为方形pool，否则k_h和k_w都要设置
     CHECK(pool_param.has_kernel_size() ||
       (pool_param.has_kernel_h() && pool_param.has_kernel_w()))
       << "For non-square filters both kernel_h and kernel_w are required.";
@@ -36,9 +40,11 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       << "Stride is stride OR stride_h and stride_w are required.";
   global_pooling_ = pool_param.global_pooling();
   if (global_pooling_) {
+    // 全局均值池化，pool参数仅取决于输入map的大小
     kernel_h_ = bottom[0]->height();
     kernel_w_ = bottom[0]->width();
   } else {
+    // 配置k_h和k_w
     if (pool_param.has_kernel_size()) {
       kernel_h_ = kernel_w_ = pool_param.kernel_size();
     } else {
@@ -61,6 +67,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     stride_w_ = pool_param.stride_w();
   }
   if (global_pooling_) {
+    // 全局均值池化，不能有stride和pad
     CHECK(pad_h_ == 0 && pad_w_ == 0 && stride_h_ == 1 && stride_w_ == 1)
       << "With Global_pooling: true; only pad = 0 and stride = 1";
   }
@@ -75,6 +82,7 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   }
 }
 
+// 设置输出维度
 template <typename Dtype>
 void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
@@ -87,6 +95,7 @@ void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
     kernel_h_ = bottom[0]->height();
     kernel_w_ = bottom[0]->width();
   }
+  // 计算池化后区域，方法类似卷积，向下取整
   pooled_height_ = static_cast<int>(ceil(static_cast<float>(
       height_ + 2 * pad_h_ - kernel_h_) / stride_h_)) + 1;
   pooled_width_ = static_cast<int>(ceil(static_cast<float>(
@@ -105,16 +114,19 @@ void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   }
   top[0]->Reshape(bottom[0]->num(), channels_, pooled_height_,
       pooled_width_);
+  // mask维度与输出相同
   if (top.size() > 1) {
     top[1]->ReshapeLike(*top[0]);
   }
   // If max pooling, we will initialize the vector index part.
+  // 最大池化，需要记录最大值的索引
   if (this->layer_param_.pooling_param().pool() ==
       PoolingParameter_PoolMethod_MAX && top.size() == 1) {
     max_idx_.Reshape(bottom[0]->num(), channels_, pooled_height_,
         pooled_width_);
   }
   // If stochastic pooling, we will initialize the random index part.
+  // 随机池化，需要记录随机值的索引
   if (this->layer_param_.pooling_param().pool() ==
       PoolingParameter_PoolMethod_STOCHASTIC) {
     rand_idx_.Reshape(bottom[0]->num(), channels_, pooled_height_,
@@ -131,16 +143,19 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   Dtype* top_data = top[0]->mutable_cpu_data();
   const int top_count = top[0]->count();
   // We'll output the mask to top[1] if it's of size >1.
+  // 是否输出掩膜
   const bool use_top_mask = top.size() > 1;
   int* mask = NULL;  // suppress warnings about uninitalized variables
   Dtype* top_mask = NULL;
   // Different pooling methods. We explicitly do the switch outside the for
   // loop to save time, although this results in more code.
+  // 用switch判断池化类型
   switch (this->layer_param_.pooling_param().pool()) {
   case PoolingParameter_PoolMethod_MAX:
     // Initialize
     if (use_top_mask) {
       top_mask = top[1]->mutable_cpu_data();
+      // 初始化索引为-1
       caffe_set(top_count, Dtype(-1), top_mask);
     } else {
       mask = max_idx_.mutable_cpu_data();
@@ -152,16 +167,20 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       for (int c = 0; c < channels_; ++c) {
         for (int ph = 0; ph < pooled_height_; ++ph) {
           for (int pw = 0; pw < pooled_width_; ++pw) {
+            // 池化区域起点
             int hstart = ph * stride_h_ - pad_h_;
             int wstart = pw * stride_w_ - pad_w_;
+            // 池化区域终点（不超过边界）
             int hend = min(hstart + kernel_h_, height_);
             int wend = min(wstart + kernel_w_, width_);
             hstart = max(hstart, 0);
             wstart = max(wstart, 0);
             const int pool_index = ph * pooled_width_ + pw;
+            // 两个for循环确定区域内的最大值
             for (int h = hstart; h < hend; ++h) {
               for (int w = wstart; w < wend; ++w) {
                 const int index = h * width_ + w;
+                // 更新最大值，并更新索引
                 if (bottom_data[index] > top_data[pool_index]) {
                   top_data[pool_index] = bottom_data[index];
                   if (use_top_mask) {
@@ -175,6 +194,8 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
           }
         }
         // compute offset
+        // 重新计算起点，因为上述循环中的index是基于每个channel的
+        // 算下一个通道时，起点应该加上偏置
         bottom_data += bottom[0]->offset(0, 1);
         top_data += top[0]->offset(0, 1);
         if (use_top_mask) {
@@ -209,6 +230,7 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                     bottom_data[h * width_ + w];
               }
             }
+            // 求和后取均值
             top_data[ph * pooled_width_ + pw] /= pool_size;
           }
         }
@@ -218,6 +240,7 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       }
     }
     break;
+  // 随机池化，未实现
   case PoolingParameter_PoolMethod_STOCHASTIC:
     NOT_IMPLEMENTED;
     break;
@@ -256,6 +279,7 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
             const int index = ph * pooled_width_ + pw;
             const int bottom_index =
                 use_top_mask ? top_mask[index] : mask[index];
+            // 填充至对应index，其它默认为0
             bottom_diff[bottom_index] += top_diff[index];
           }
         }
@@ -284,6 +308,7 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
             wstart = max(wstart, 0);
             hend = min(hend, height_);
             wend = min(wend, width_);
+            // 相应的池化区域都填充相同的值，注意需要除以池化参数
             for (int h = hstart; h < hend; ++h) {
               for (int w = wstart; w < wend; ++w) {
                 bottom_diff[h * width_ + w] +=

@@ -15,6 +15,7 @@ namespace caffe {
 template<typename Dtype>
 DataTransformer<Dtype>::DataTransformer(const TransformationParameter& param,
     Phase phase)
+// Phase代表{train, test}
     : param_(param), phase_(phase) {
   // check if we want to use mean_file
   if (param_.has_mean_file()) {
@@ -25,11 +26,13 @@ DataTransformer<Dtype>::DataTransformer(const TransformationParameter& param,
       LOG(INFO) << "Loading mean file from: " << mean_file;
     }
     BlobProto blob_proto;
+    // c_str表示从string类转化为char * 类
     ReadProtoFromBinaryFileOrDie(mean_file.c_str(), &blob_proto);
     data_mean_.FromProto(blob_proto);
   }
   // check if we want to use mean_value
   if (param_.mean_value_size() > 0) {
+    // 均值文件和指定的均值不能同时作用
     CHECK(param_.has_mean_file() == false) <<
       "Cannot specify mean_file and mean_value at the same time";
     for (int c = 0; c < param_.mean_value_size(); ++c) {
@@ -46,19 +49,24 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
   const int datum_height = datum.height();
   const int datum_width = datum.width();
 
+  // 裁剪大小
   const int crop_size = param_.crop_size();
+  // 缩放大小
   const Dtype scale = param_.scale();
+  // 随机镜像与否？
   const bool do_mirror = param_.mirror() && Rand(2);
   const bool has_mean_file = param_.has_mean_file();
   const bool has_uint8 = data.size() > 0;
   const bool has_mean_values = mean_values_.size() > 0;
 
   CHECK_GT(datum_channels, 0);
+  // 裁剪尺寸不能大于输入本身尺寸
   CHECK_GE(datum_height, crop_size);
   CHECK_GE(datum_width, crop_size);
 
   Dtype* mean = NULL;
   if (has_mean_file) {
+    // 均值维度必须和数据对应
     CHECK_EQ(datum_channels, data_mean_.channels());
     CHECK_EQ(datum_height, data_mean_.height());
     CHECK_EQ(datum_width, data_mean_.width());
@@ -69,6 +77,7 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
      "Specify either 1 mean_value or as many as channels: " << datum_channels;
     if (datum_channels > 1 && mean_values_.size() == 1) {
       // Replicate the mean_value for simplicity
+      // 如果均值只有一个通道，则复制多个通道
       for (int c = 1; c < datum_channels; ++c) {
         mean_values_.push_back(mean_values_[0]);
       }
@@ -78,12 +87,15 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
   int height = datum_height;
   int width = datum_width;
 
+  // 裁剪起点？
   int h_off = 0;
   int w_off = 0;
   if (crop_size) {
     height = crop_size;
     width = crop_size;
     // We only do random crop when we do training.
+    // 训练阶段，随机裁剪
+    // 测试阶段，仅仅取中间裁剪
     if (phase_ == TRAIN) {
       h_off = Rand(datum_height - crop_size + 1);
       w_off = Rand(datum_width - crop_size + 1);
@@ -93,23 +105,30 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
     }
   }
 
+  // 逐点计算变换
   Dtype datum_element;
   int top_index, data_index;
   for (int c = 0; c < datum_channels; ++c) {
     for (int h = 0; h < height; ++h) {
       for (int w = 0; w < width; ++w) {
+        // data_index：对应到未裁剪的原图中的索引
+        // top_index：裁剪后输出的索引
         data_index = (c * datum_height + h_off + h) * datum_width + w_off + w;
         if (do_mirror) {
+          // （水平）镜像
           top_index = (c * height + h) * width + (width - 1 - w);
         } else {
           top_index = (c * height + h) * width + w;
         }
+        // 定点or浮点
         if (has_uint8) {
           datum_element =
             static_cast<Dtype>(static_cast<uint8_t>(data[data_index]));
         } else {
           datum_element = datum.float_data(data_index);
         }
+        // 取均值后再计算缩放
+        // 均值按照data_index计算，因为均值是未裁剪的大小
         if (has_mean_file) {
           transformed_data[top_index] =
             (datum_element - mean[data_index]) * scale;
@@ -471,7 +490,7 @@ vector<int> DataTransformer<Dtype>::InferBlobShape(const Datum& datum) {
   shape[1] = datum_channels;
   shape[2] = (crop_size)? crop_size: datum_height;
   shape[3] = (crop_size)? crop_size: datum_width;
-  return shape;
+  return shape; // 预处理后的维度
 }
 
 template<typename Dtype>
@@ -531,6 +550,7 @@ void DataTransformer<Dtype>::InitRand() {
   }
 }
 
+// 产生0~n-1的随机数
 template <typename Dtype>
 int DataTransformer<Dtype>::Rand(int n) {
   CHECK(rng_);

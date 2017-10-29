@@ -21,7 +21,9 @@ class DataLayer : public BasePrefetchingDataLayer<Dtype> {
   virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual inline const char* type() const { return "Data"; }
+  // 无输入
   virtual inline int ExactNumBottomBlobs() const { return 0; }
+  // 输出根据有无label可为1或2
   virtual inline int MinTopBlobs() const { return 1; }
   virtual inline int MaxTopBlobs() const { return 2; }
 

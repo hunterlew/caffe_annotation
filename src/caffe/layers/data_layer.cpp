@@ -34,11 +34,15 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   datum.ParseFromString(cursor_->value());
 
   // Use data_transformer to infer the expected blob shape from datum.
+  // 根据预处理后的维度初始化输出data维度
   vector<int> top_shape = this->data_transformer_->InferBlobShape(datum);
   this->transformed_data_.Reshape(top_shape);
   // Reshape top[0] and prefetch_data according to the batch_size.
+  // 每次取一批量
   top_shape[0] = batch_size;
   top[0]->Reshape(top_shape);
+  // prefetch_size是否可以理解为有多少批量？
+  // 每个批量设置data大小，num_为批量个数
   for (int i = 0; i < this->prefetch_.size(); ++i) {
     this->prefetch_[i]->data_.Reshape(top_shape);
   }
@@ -47,6 +51,7 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       << top[0]->channels() << "," << top[0]->height() << ","
       << top[0]->width();
   // label
+  // 设置label维度
   if (this->output_labels_) {
     vector<int> label_shape(1, batch_size);
     top[1]->Reshape(label_shape);
@@ -113,6 +118,7 @@ void DataLayer<Dtype>::load_batch(Batch<Dtype>* batch) {
     timer.Start();
     int offset = batch->data_.offset(item_id);
     Dtype* top_data = batch->data_.mutable_cpu_data();
+    // 预处理后保存在transformed_data_中
     this->transformed_data_.set_cpu_data(top_data + offset);
     this->data_transformer_->Transform(datum, &(this->transformed_data_));
     // Copy label.

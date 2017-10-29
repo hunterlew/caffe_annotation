@@ -27,6 +27,10 @@ namespace caffe {
  *   be filtered. col2im restores the output spatial structure by rolling up
  *   the output channel N' columns of the output matrix.
  */
+
+// 用矩阵乘法实现卷积，参考文章 High Performance Convolutional Neural Networks for Document Processing
+  // http://www.jianshu.com/p/555702a76426
+  // im2col那块具体实现不太一样，可以参考这篇 http://blog.csdn.net/mrhiuser/article/details/52672824
 template <typename Dtype>
 class ConvolutionLayer : public BaseConvolutionLayer<Dtype> {
  public:
