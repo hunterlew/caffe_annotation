@@ -23,6 +23,7 @@ class SoftmaxLayer : public Layer<Dtype> {
       const vector<Blob<Dtype>*>& top);
 
   virtual inline const char* type() const { return "Softmax"; }
+  // softmax仅仅计算概率，不需要label输入，只需要1个输入
   virtual inline int ExactNumBottomBlobs() const { return 1; }
   virtual inline int ExactNumTopBlobs() const { return 1; }
 

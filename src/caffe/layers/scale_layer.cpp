@@ -16,7 +16,9 @@ void ScaleLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     LOG(INFO) << "Skipping parameter initialization";
   } else if (bottom.size() == 1) {
     // scale is a learned parameter; initialize it
+    // 1
     axis_ = bottom[0]->CanonicalAxisIndex(param.axis());
+    // 2
     const int num_axes = param.num_axes();
     CHECK_GE(num_axes, -1) << "num_axes must be non-negative, "
                            << "or -1 to extend to the end of bottom[0]";
@@ -30,9 +32,11 @@ void ScaleLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
         bottom[0]->shape().begin() + axis_;
     const vector<int>::const_iterator& shape_end =
         (num_axes == -1) ? bottom[0]->shape().end() : (shape_start + num_axes);
+    // 初始化gamma参数维度，[c h w]，针对每个神经元计算的
     vector<int> scale_shape(shape_start, shape_end);
     this->blobs_[0].reset(new Blob<Dtype>(scale_shape));
     FillerParameter filler_param(param.filler());
+    // 参数gamma初始化为1
     if (!param.has_filler()) {
       // Default to unit (1) filler for identity operation.
       filler_param.set_type("constant");
@@ -41,6 +45,7 @@ void ScaleLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     shared_ptr<Filler<Dtype> > filler(GetFiller<Dtype>(filler_param));
     filler->Fill(this->blobs_[0].get());
   }
+  // 偏置项beta
   if (param.bias_term()) {
     LayerParameter layer_param(this->layer_param_);
     layer_param.set_type("Bias");
@@ -52,6 +57,7 @@ void ScaleLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       bias_param->set_num_axes(param.num_axes());
     }
     bias_param->mutable_filler()->CopyFrom(param.bias_filler());
+    // 创建bias层，参见bias.hpp
     bias_layer_ = LayerRegistry<Dtype>::CreateLayer(layer_param);
     bias_bottom_vec_.resize(1);
     bias_bottom_vec_[0] = bottom[0];
@@ -93,8 +99,11 @@ void ScaleLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
         << "dimension mismatch between bottom[0]->shape(" << axis_ + i
         << ") and scale->shape(" << i << ")";
   }
+  // n
   outer_dim_ = bottom[0]->count(0, axis_);
+  // c*h*w
   scale_dim_ = scale->count();
+  // 1
   inner_dim_ = bottom[0]->count(axis_ + scale->num_axes());
   if (bottom[0] == top[0]) {  // in-place computation
     temp_.ReshapeLike(*bottom[0]);
@@ -125,10 +134,12 @@ void ScaleLayer<Dtype>::Forward_cpu(
     caffe_copy(bottom[0]->count(), bottom[0]->cpu_data(),
                temp_.mutable_cpu_data());
   }
+  // scale系数，可以是输入，也可以是要训练的参数
   const Dtype* scale_data =
       ((bottom.size() > 1) ? bottom[1] : this->blobs_[0].get())->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
   for (int n = 0; n < outer_dim_; ++n) {
+    // scale_dim为c*h*w，每个神经元配一个gamma和beta
     for (int d = 0; d < scale_dim_; ++d) {
       const Dtype factor = scale_data[d];
       caffe_cpu_scale(inner_dim_, factor, bottom_data, top_data);

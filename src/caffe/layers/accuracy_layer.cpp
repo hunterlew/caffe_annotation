@@ -22,6 +22,7 @@ void AccuracyLayer<Dtype>::LayerSetUp(
 template <typename Dtype>
 void AccuracyLayer<Dtype>::Reshape(
   const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+  // bottom[0]->count() / bottom[1]->count() 得到类别数
   CHECK_LE(top_k_, bottom[0]->count() / bottom[1]->count())
       << "top_k must be less than or equal to the number of classes.";
   label_axis_ =
@@ -71,14 +72,17 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       DCHECK_LT(label_value, num_labels);
       // Top-k accuracy
       std::vector<std::pair<Dtype, int> > bottom_data_vector;
+      // 对每一个样本，将各个类别的输出及对应类别构成pair存到vector中
       for (int k = 0; k < num_labels; ++k) {
         bottom_data_vector.push_back(std::make_pair(
             bottom_data[i * dim + k * inner_num_ + j], k));
       }
+      // 局部排序：最大堆
       std::partial_sort(
           bottom_data_vector.begin(), bottom_data_vector.begin() + top_k_,
           bottom_data_vector.end(), std::greater<std::pair<Dtype, int> >());
       // check if true label is in top k predictions
+      // 如果真实label在topk中 ，则认为准确
       for (int k = 0; k < top_k_; k++) {
         if (bottom_data_vector[k].second == label_value) {
           ++accuracy;
@@ -86,11 +90,13 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
           break;
         }
       }
+      // 样本数统计
       ++count;
     }
   }
 
   // LOG(INFO) << "Accuracy: " << accuracy;
+  // 准确率计算
   top[0]->mutable_cpu_data()[0] = accuracy / count;
   if (top.size() > 1) {
     for (int i = 0; i < top[1]->count(); ++i) {

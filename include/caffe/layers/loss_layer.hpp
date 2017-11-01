@@ -29,6 +29,7 @@ class LossLayer : public Layer<Dtype> {
   virtual void Reshape(
       const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
 
+  // 两个输入，预测输出和label
   virtual inline int ExactNumBottomBlobs() const { return 2; }
 
   /**

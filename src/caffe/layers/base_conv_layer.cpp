@@ -305,7 +305,8 @@ void BaseConvolutionLayer<Dtype>::forward_cpu_gemm(const Dtype* input,
     col_buff = col_buffer_.cpu_data();
   }
   for (int g = 0; g < group_; ++g) {
-    // 转化为矩阵相乘
+    // 转化为矩阵相乘 w * im
+    // 输入都是一维的，gemm内部应该有reshape的操作，其中w为c*k，im为k*o，输出c*o，按行排列
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, conv_out_channels_ /
         group_, conv_out_spatial_dim_, kernel_dim_,
         (Dtype)1., weights + weight_offset_ * g, col_buff + col_offset_ * g,

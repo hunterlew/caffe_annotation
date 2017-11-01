@@ -9,15 +9,18 @@ namespace caffe {
 template <typename Dtype>
 void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
+  // 输出神经元数
   const int num_output = this->layer_param_.inner_product_param().num_output();
   bias_term_ = this->layer_param_.inner_product_param().bias_term();
   transpose_ = this->layer_param_.inner_product_param().transpose();
   N_ = num_output;
+  // 要进行展开的轴
   const int axis = bottom[0]->CanonicalAxisIndex(
       this->layer_param_.inner_product_param().axis());
   // Dimensions starting from "axis" are "flattened" into a single
   // length K_ vector. For example, if bottom[0]'s shape is (N, C, H, W),
   // and axis == 1, N inner products with dimension CHW are performed.
+  // reshape后输入的神经元数
   K_ = bottom[0]->count(axis);
   // Check if we need to set up the weights
   if (this->blobs_.size() > 0) {
@@ -29,6 +32,7 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       this->blobs_.resize(1);
     }
     // Initialize the weights
+    // 初始化权重
     vector<int> weight_shape(2);
     if (transpose_) {
       weight_shape[0] = K_;
@@ -43,6 +47,7 @@ void InnerProductLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
         this->layer_param_.inner_product_param().weight_filler()));
     weight_filler->Fill(this->blobs_[0].get());
     // If necessary, intiialize and fill the bias term
+    // 初始化偏置
     if (bias_term_) {
       vector<int> bias_shape(1, N_);
       this->blobs_[1].reset(new Blob<Dtype>(bias_shape));
@@ -65,10 +70,14 @@ void InnerProductLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       << "Input size incompatible with inner product parameters.";
   // The first "axis" dimensions are independent inner products; the total
   // number of these is M_, the product over these dimensions.
+  // 这里指样本数num_
   M_ = bottom[0]->count(0, axis);
   // The top shape will be the bottom shape with the flattened axes dropped,
   // and replaced by a single axis with dimension num_output (N_).
   vector<int> top_shape = bottom[0]->shape();
+  // 当n小于当前size()值时候，vector首先会减少size()值，保存前n个元素，然后将超出n的元素删除
+  // 当n大于当前size()值时候，vector会插入相应数量的元素使得size()值达到n，并对这些元素进行初始化
+  // 最终reshape后输出变为二维[M_ N_]
   top_shape.resize(axis + 1);
   top_shape[axis] = N_;
   top[0]->Reshape(top_shape);
@@ -86,9 +95,17 @@ void InnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
   const Dtype* weight = this->blobs_[0]->cpu_data();
+  // 矩阵相乘，(M_*K_) * (K_*N_) --> (M_*N_)
+  // caffe_cpu_gemm内部应该有reshape操作，将bottom_data reshape为[M_ K_]
   caffe_cpu_gemm<Dtype>(CblasNoTrans, transpose_ ? CblasNoTrans : CblasTrans,
       M_, N_, K_, (Dtype)1.,
       bottom_data, weight, (Dtype)0., top_data);
+  // 有偏置项
+  // 假如四个输出，偏置为[1 2 3 4]，复制项为[1 1 1 1].T
+  // 则[1 1 1 1].T * [1 2 3 4] = [ 1 2 3 4
+  //                               1 2 3 4
+  //                               1 2 3 4
+  //                               1 2 3 4 ]
   if (bias_term_) {
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, M_, N_, 1, (Dtype)1.,
         bias_multiplier_.cpu_data(),

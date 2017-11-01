@@ -34,6 +34,7 @@ class ScaleLayer: public Layer<Dtype> {
 
   virtual inline const char* type() const { return "Scale"; }
   // Scale
+  // scale系数，可以是输入，也可以是要训练的参数，所以输入数可以1或2
   virtual inline int MinBottomBlobs() const { return 1; }
   virtual inline int MaxBottomBlobs() const { return 2; }
   virtual inline int ExactNumTopBlobs() const { return 1; }

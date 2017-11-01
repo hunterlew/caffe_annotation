@@ -25,10 +25,13 @@ void BatchNormLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     this->blobs_.resize(3);
     vector<int> sz;
     sz.push_back(channels_);
+    // 有channel个，均值滑动和及方差滑动和
     this->blobs_[0].reset(new Blob<Dtype>(sz));
     this->blobs_[1].reset(new Blob<Dtype>(sz));
     sz[0] = 1;
+    // 只有1个，滑动系数和
     this->blobs_[2].reset(new Blob<Dtype>(sz));
+    // 都初始化为0
     for (int i = 0; i < 3; ++i) {
       caffe_set(this->blobs_[i]->count(), Dtype(0),
                 this->blobs_[i]->mutable_cpu_data());
@@ -56,14 +59,17 @@ void BatchNormLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   top[0]->ReshapeLike(*bottom[0]);
 
   vector<int> sz;
+  // c
   sz.push_back(channels_);
   mean_.Reshape(sz);
   variance_.Reshape(sz);
   temp_.ReshapeLike(*bottom[0]);
   x_norm_.ReshapeLike(*bottom[0]);
+  // n
   sz[0] = bottom[0]->shape(0);
   batch_sum_multiplier_.Reshape(sz);
 
+  // h*w
   int spatial_dim = bottom[0]->count()/(channels_*bottom[0]->shape(0));
   if (spatial_sum_multiplier_.num_axes() == 0 ||
       spatial_sum_multiplier_.shape(0) != spatial_dim) {
@@ -73,6 +79,7 @@ void BatchNormLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
     caffe_set(spatial_sum_multiplier_.count(), Dtype(1), multiplier_data);
   }
 
+  // n*c
   int numbychans = channels_*bottom[0]->shape(0);
   if (num_by_chans_.num_axes() == 0 ||
       num_by_chans_.shape(0) != numbychans) {
@@ -95,63 +102,80 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     caffe_copy(bottom[0]->count(), bottom_data, top_data);
   }
 
-  if (use_global_stats_) {
+  if (use_global_stats_) {  // 测试过程
     // use the stored mean/variance estimates.
+    // 除以滑动系数和，相当于除以权重
     const Dtype scale_factor = this->blobs_[2]->cpu_data()[0] == 0 ?
         0 : 1 / this->blobs_[2]->cpu_data()[0];
+    // 均值滑动和/权重得到均值估计
     caffe_cpu_scale(variance_.count(), scale_factor,
         this->blobs_[0]->cpu_data(), mean_.mutable_cpu_data());
+    // 方差滑动和/权重得到方差估计
     caffe_cpu_scale(variance_.count(), scale_factor,
         this->blobs_[1]->cpu_data(), variance_.mutable_cpu_data());
-  } else {
+  } else {  // 训练阶段
     // compute mean
+    // 输出[h*c 1]
     caffe_cpu_gemv<Dtype>(CblasNoTrans, channels_ * num, spatial_dim,
         1. / (num * spatial_dim), bottom_data,
         spatial_sum_multiplier_.cpu_data(), 0.,
         num_by_chans_.mutable_cpu_data());
+    // 输出[c 1]，每个通道一个mean，注意归一化因子1. / (num * spatial_dim)
     caffe_cpu_gemv<Dtype>(CblasTrans, num, channels_, 1.,
         num_by_chans_.cpu_data(), batch_sum_multiplier_.cpu_data(), 0.,
         mean_.mutable_cpu_data());
   }
 
   // subtract mean
+  // 扩展输出[n c]，存在num_by_chans_
   caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, num, channels_, 1, 1,
       batch_sum_multiplier_.cpu_data(), mean_.cpu_data(), 0.,
       num_by_chans_.mutable_cpu_data());
+  // 减去均值后输出[n*c h*w]，存在top_data
   caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, channels_ * num,
       spatial_dim, 1, -1, num_by_chans_.cpu_data(),
       spatial_sum_multiplier_.cpu_data(), 1., top_data);
 
-  if (!use_global_stats_) {
+  if (!use_global_stats_) { // 训练阶段
     // compute variance using var(X) = E((X-EX)^2)
+    // 根据方差定义计算方差
     caffe_sqr<Dtype>(top[0]->count(), top_data,
                      temp_.mutable_cpu_data());  // (X-EX)^2
     caffe_cpu_gemv<Dtype>(CblasNoTrans, channels_ * num, spatial_dim,
         1. / (num * spatial_dim), temp_.cpu_data(),
         spatial_sum_multiplier_.cpu_data(), 0.,
         num_by_chans_.mutable_cpu_data());
+    // 每个通道一个var，注意归一化因子1. / (num * spatial_dim)
     caffe_cpu_gemv<Dtype>(CblasTrans, num, channels_, 1.,
         num_by_chans_.cpu_data(), batch_sum_multiplier_.cpu_data(), 0.,
         variance_.mutable_cpu_data());  // E((X_EX)^2)
 
     // compute and save moving average
+    // 若lambda=1比较好理解，关键是滑动平均这种方法可以减少测试阶段的再遍历
+    // 假设滑动平均系数为lambda，则滑动系数和s = lambda*s + 1
     this->blobs_[2]->mutable_cpu_data()[0] *= moving_average_fraction_;
     this->blobs_[2]->mutable_cpu_data()[0] += 1;
+    // 新滑动平均和 = 1 * lambda * 当前均值 + 旧滑动平均和
     caffe_cpu_axpby(mean_.count(), Dtype(1), mean_.cpu_data(),
         moving_average_fraction_, this->blobs_[0]->mutable_cpu_data());
+    // n*h*w，每个通道参与平均的神经元数
     int m = bottom[0]->count()/channels_;
+    // 方差无偏估计系数m/(m-1)
     Dtype bias_correction_factor = m > 1 ? Dtype(m)/(m-1) : 1;
+    // 新滑动方差和 = m/(m-1) * lambda * 当前方差 + 旧滑动方差和
     caffe_cpu_axpby(variance_.count(), bias_correction_factor,
         variance_.cpu_data(), moving_average_fraction_,
         this->blobs_[1]->mutable_cpu_data());
   }
 
   // normalize variance
+  // (sigma + eps)^0.5
   caffe_add_scalar(variance_.count(), eps_, variance_.mutable_cpu_data());
   caffe_sqrt(variance_.count(), variance_.cpu_data(),
              variance_.mutable_cpu_data());
 
   // replicate variance to input size
+  // 方差归一化，继续存给top_data中
   caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, num, channels_, 1, 1,
       batch_sum_multiplier_.cpu_data(), variance_.cpu_data(), 0.,
       num_by_chans_.mutable_cpu_data());
@@ -161,6 +185,7 @@ void BatchNormLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   caffe_div(temp_.count(), top_data, temp_.cpu_data(), top_data);
   // TODO(cdoersch): The caching is only needed because later in-place layers
   //                 might clobber the data.  Can we skip this if they won't?
+  // 复制一份到x_norm
   caffe_copy(x_norm_.count(), top_data,
       x_norm_.mutable_cpu_data());
 }

@@ -28,8 +28,10 @@ void BiasLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
         bottom[0]->shape().begin() + axis;
     const vector<int>::const_iterator& shape_end =
         (num_axes == -1) ? bottom[0]->shape().end() : (shape_start + num_axes);
+        // 设置beta参数维度
     vector<int> bias_shape(shape_start, shape_end);
     this->blobs_[0].reset(new Blob<Dtype>(bias_shape));
+      // 初始化beta
     shared_ptr<Filler<Dtype> > filler(GetFiller<Dtype>(param.filler()));
     filler->Fill(this->blobs_[0].get());
   }

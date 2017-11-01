@@ -23,17 +23,9 @@ inline bool is_a_ge_zero_and_a_lt_b(int a, int b) {
 //  10  11  12  13  14
 //  15  16  17  18  19
 //  20  21  22  23  24
-// 则data_col按顺序排列为：
-//  0   2   10  12
-//  1   3   11  13
-//  2   4   12  14
-//  5   7   15  17
-//  6   8   16  18
-//  7   9   17  19
-//  10  12  20  22
-//  11  13  21  23
-//  12  14  22  24
-// 如果输入多个通道，则再继续追加
+// 则data_col按顺序排列输出为：
+// 0 2 10 12 1 3 11 13 2 4 12 14 5 7 15 17 6 8 16 18 7 9 17 19 10 12 20 22 11 13 21 23 12 14 22 24
+// 如果输入多个通道，则再继续追加，后面的gemm函数会有相应的reshape操作
 template <typename Dtype>
 void im2col_cpu(const Dtype* data_im, const int channels,
     const int height, const int width, const int kernel_h, const int kernel_w,

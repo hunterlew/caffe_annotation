@@ -39,11 +39,17 @@ class InnerProductLayer : public Layer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
+  // 相当于num_
   int M_;
+  // reshape后输入的神经元数
   int K_;
+  // 输出神经元数
   int N_;
+  // 是否有偏置项
   bool bias_term_;
+  // 偏置复制项（用于维度适配）
   Blob<Dtype> bias_multiplier_;
+  // 是否转置
   bool transpose_;  ///< if true, assume transposed weights
 };
 

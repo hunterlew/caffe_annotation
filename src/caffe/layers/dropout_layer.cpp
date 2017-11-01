@@ -24,6 +24,7 @@ void DropoutLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   NeuronLayer<Dtype>::Reshape(bottom, top);
   // Set up the cache for random number generation
   // ReshapeLike does not work because rand_vec_ is of Dtype uint
+  // ？
   rand_vec_.Reshape(bottom[0]->shape());
 }
 
@@ -34,13 +35,16 @@ void DropoutLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   Dtype* top_data = top[0]->mutable_cpu_data();
   unsigned int* mask = rand_vec_.mutable_cpu_data();
   const int count = bottom[0]->count();
+  // 注意dropout只在训练阶段作用
   if (this->phase_ == TRAIN) {
     // Create random numbers
+    // 伯努利随机数，0/1（注意不是0~1，是指伯努利实验）
     caffe_rng_bernoulli(count, 1. - threshold_, mask);
     for (int i = 0; i < count; ++i) {
       top_data[i] = bottom_data[i] * mask[i] * scale_;
     }
   } else {
+    // 测试阶段没有dropout
     caffe_copy(bottom[0]->count(), bottom_data, top_data);
   }
 }
@@ -53,9 +57,11 @@ void DropoutLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     const Dtype* top_diff = top[0]->cpu_diff();
     Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
     if (this->phase_ == TRAIN) {
+      // mask已经保留到rand_vec_中了
       const unsigned int* mask = rand_vec_.cpu_data();
       const int count = bottom[0]->count();
       for (int i = 0; i < count; ++i) {
+        // 与正向相同
         bottom_diff[i] = top_diff[i] * mask[i] * scale_;
       }
     } else {

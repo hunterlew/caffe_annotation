@@ -61,6 +61,7 @@ class SoftmaxWithLossLayer : public LossLayer<Dtype> {
   virtual inline const char* type() const { return "SoftmaxWithLoss"; }
   virtual inline int ExactNumTopBlobs() const { return -1; }
   virtual inline int MinTopBlobs() const { return 1; }
+  // 允许输出两个blob
   virtual inline int MaxTopBlobs() const { return 2; }
 
  protected:
@@ -108,8 +109,10 @@ class SoftmaxWithLossLayer : public LossLayer<Dtype> {
       LossParameter_NormalizationMode normalization_mode, int valid_count);
 
   /// The internal SoftmaxLayer used to map predictions to a distribution.
+  // 指向softmax函数，因为该层需要利用softmax层计算概率
   shared_ptr<Layer<Dtype> > softmax_layer_;
   /// prob stores the output probability predictions from the SoftmaxLayer.
+  // 存后验概率
   Blob<Dtype> prob_;
   /// bottom vector holder used in call to the underlying SoftmaxLayer::Forward
   vector<Blob<Dtype>*> softmax_bottom_vec_;
@@ -120,6 +123,7 @@ class SoftmaxWithLossLayer : public LossLayer<Dtype> {
   /// The label indicating that an instance should be ignored.
   int ignore_label_;
   /// How to normalize the output loss.
+  // loss归一化方法
   LossParameter_NormalizationMode normalization_;
 
   int softmax_axis_, outer_num_, inner_num_;

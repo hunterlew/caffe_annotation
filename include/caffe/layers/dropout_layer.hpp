@@ -67,11 +67,15 @@ class DropoutLayer : public NeuronLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
   /// when divided by UINT_MAX, the randomly generated values @f$u\sim U(0,1)@f$
+  // 0~1组成的mask
   Blob<unsigned int> rand_vec_;
   /// the probability @f$ p @f$ of dropping any input
+  // drop系数，表示不激活的概率
   Dtype threshold_;
   /// the scale for undropped inputs at train time @f$ 1 / (1 - p) @f$
+  // 为保持平衡，输出值需要有个缩放系数
   Dtype scale_;
+  // 没用到？
   unsigned int uint_thres_;
 };
 

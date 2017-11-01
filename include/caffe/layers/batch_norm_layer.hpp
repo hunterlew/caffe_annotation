@@ -36,6 +36,7 @@ namespace caffe {
  *
  * TODO(dox): thorough documentation for Forward, Backward, and proto params.
  */
+  // bn层，需要配合scale层使用
 template <typename Dtype>
 class BatchNormLayer : public Layer<Dtype> {
  public:
@@ -61,7 +62,9 @@ class BatchNormLayer : public Layer<Dtype> {
      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
   Blob<Dtype> mean_, variance_, temp_, x_norm_;
+  // 是否需要全局统计信息（根据训练or测试）
   bool use_global_stats_;
+  // 滑动系数
   Dtype moving_average_fraction_;
   int channels_;
   Dtype eps_;
