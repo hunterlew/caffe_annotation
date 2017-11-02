@@ -221,6 +221,7 @@ class Net {
    * @brief Remove layers that the user specified should be excluded given the current
    *        phase, level, and stage.
    */
+  // 去掉某些特定层
   static void FilterNet(const NetParameter& param,
       NetParameter* param_filtered);
   /// @brief return whether NetState state meets NetStateRule rule
@@ -228,6 +229,7 @@ class Net {
       const string& layer_name);
 
   // Invoked at specific points during an iteration
+  // 处于迭代中的某个状态，为了多线程中的同步？
   class Callback {
    protected:
     virtual void run(int layer) = 0;
@@ -255,14 +257,17 @@ class Net {
  protected:
   // Helpers for Init.
   /// @brief Append a new top blob to the net.
+  // 加一个输出
   void AppendTop(const NetParameter& param, const int layer_id,
                  const int top_id, set<string>* available_blobs,
                  map<string, int>* blob_name_to_idx);
   /// @brief Append a new bottom blob to the net.
+  // 加一个输入
   int AppendBottom(const NetParameter& param, const int layer_id,
                    const int bottom_id, set<string>* available_blobs,
                    map<string, int>* blob_name_to_idx);
   /// @brief Append a new parameter blob to the net.
+  // 加一组参数？
   void AppendParam(const NetParameter& param, const int layer_id,
                    const int param_id);
 
@@ -274,42 +279,59 @@ class Net {
   void UpdateDebugInfo(const int param_id);
 
   /// @brief The network name
+  // 网络名称
   string name_;
   /// @brief The phase: TRAIN or TEST
+  // 训练or测试
   Phase phase_;
   /// @brief Individual layers in the net
+  // 指针向量，每个指针指向各个层
   vector<shared_ptr<Layer<Dtype> > > layers_;
+  // 各层名称
   vector<string> layer_names_;
+  // 各层由名称对应索引
   map<string, int> layer_names_index_;
+  // 各层是否需要传播误差（从layer的角度，对应prototxt中各层的name）
   vector<bool> layer_need_backward_;
   /// @brief the blobs storing intermediate results between the layer.
+  // 各层的bottom或top，可以理解层与层之间的中间blob
   vector<shared_ptr<Blob<Dtype> > > blobs_;
+  // bottom或top结果名称
   vector<string> blob_names_;
+  // 由名称对应索引
   map<string, int> blob_names_index_;
+  // 是否需要传播误差（从blob角度，对应prototxt中各层的bottom和top）
   vector<bool> blob_need_backward_;
   /// bottom_vecs stores the vectors containing the input for each layer.
   /// They don't actually host the blobs (blobs_ does), so we simply store
   /// pointers.
+  // 指针向量，指向各层的输入（可能有多个）
   vector<vector<Blob<Dtype>*> > bottom_vecs_;
   vector<vector<int> > bottom_id_vecs_;
   vector<vector<bool> > bottom_need_backward_;
   /// top_vecs stores the vectors containing the output for each layer
+  // 指针向量，指向各层的输出
   vector<vector<Blob<Dtype>*> > top_vecs_;
   vector<vector<int> > top_id_vecs_;
   /// Vector of weight in the loss (or objective) function of each net blob,
   /// indexed by blob_id.
+  // 输出各个loss的权重
   vector<Dtype> blob_loss_weights_;
+  // 各层参数向量id
   vector<vector<int> > param_id_vecs_;
+  // 各层参数是独有还是与其它层共享
   vector<int> param_owners_;
   vector<string> param_display_names_;
   vector<pair<int, int> > param_layer_indices_;
   map<string, int> param_names_index_;
   /// blob indices for the input and the output of the net
+  // 整个网络的输入和输出（以网络的角度）
   vector<int> net_input_blob_indices_;
   vector<int> net_output_blob_indices_;
   vector<Blob<Dtype>*> net_input_blobs_;
   vector<Blob<Dtype>*> net_output_blobs_;
   /// The parameters in the network.
+  // 指向各层参数blob的指针（对layer而言），指的是可学习更新的参数
   vector<shared_ptr<Blob<Dtype> > > params_;
   vector<Blob<Dtype>*> learnable_params_;
   /**
@@ -321,16 +343,21 @@ class Net {
    */
   vector<int> learnable_param_ids_;
   /// the learning rate multipliers for learnable_params_
+  // 学习率
   vector<float> params_lr_;
   vector<bool> has_params_lr_;
   /// the weight decay multipliers for learnable_params_
+  // 权值衰减
   vector<float> params_weight_decay_;
   vector<bool> has_params_decay_;
   /// The bytes of memory used by this net
+  // 网络消耗内存
   size_t memory_used_;
   /// Whether to compute and display debug info for the net.
+  // 调试信息
   bool debug_info_;
   // Callbacks
+  // 用于多线程？
   vector<Callback*> before_forward_;
   vector<Callback*> after_forward_;
   vector<Callback*> before_backward_;

@@ -9,6 +9,7 @@
 
 namespace caffe {
 
+// 解决网络图中多输入和多输出的问题
 void InsertSplits(const NetParameter& param, NetParameter* param_split) {
   // Initialize by copying from the input NetParameter.
   param_split->CopyFrom(param);
@@ -55,6 +56,7 @@ void InsertSplits(const NetParameter& param, NetParameter* param_split) {
     LayerParameter* layer_param = param_split->add_layer();
     layer_param->CopyFrom(param.layer(i));
     // Replace any shared bottom blobs with split layer outputs.
+    // 多输入问题
     for (int j = 0; j < layer_param->bottom_size(); ++j) {
       const pair<int, int>& top_idx =
           bottom_idx_to_source_top_idx[make_pair(i, j)];
@@ -68,6 +70,7 @@ void InsertSplits(const NetParameter& param, NetParameter* param_split) {
     }
     // Create split layer for any top blobs used by other layer as bottom
     // blobs more than once.
+    // 多输出问题
     for (int j = 0; j < layer_param->top_size(); ++j) {
       const pair<int, int>& top_idx = make_pair(i, j);
       const int split_count = top_idx_to_bottom_count[top_idx];
@@ -107,6 +110,7 @@ void ConfigureSplitLayer(const string& layer_name, const string& blob_name,
   }
 }
 
+// 有分裂点的层命名，参考 ip2_ip2_0_split <- ip2
 string SplitLayerName(const string& layer_name, const string& blob_name,
     const int blob_idx) {
   ostringstream split_layer_name;
@@ -115,6 +119,9 @@ string SplitLayerName(const string& layer_name, const string& blob_name,
   return split_layer_name.str();
 }
 
+// 有分裂点的输入输出blob命名，参考
+// ip2_ip2_0_split -> ip2_ip2_0_split_0  
+// ip2_ip2_0_split -> ip2_ip2_0_split_1
 string SplitBlobName(const string& layer_name, const string& blob_name,
     const int blob_idx, const int split_idx) {
   ostringstream split_blob_name;

@@ -306,7 +306,7 @@ class Layer {
   // 该层的权重参数，包括权重和偏置
   vector<shared_ptr<Blob<Dtype> > > blobs_;
   /** Vector indicating whether to compute the diff of each param blob. */
-  // 是否计算该层权重和偏置的导数
+  // 是否计算该层的导数，权重和偏置
   vector<bool> param_propagate_down_;
 
   /** The vector that indicates whether each top blob has a non-zero weight in
