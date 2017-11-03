@@ -43,6 +43,7 @@ class Solver {
  public:
   explicit Solver(const SolverParameter& param);
   explicit Solver(const string& param_file);
+  // 初始化
   void Init(const SolverParameter& param);
   void InitTrainNet();
   void InitTestNets();
@@ -54,17 +55,21 @@ class Solver {
   SolverAction::Enum GetRequestedAction();
   // The main entry of the solver function. In default, iter will be zero. Pass
   // in a non-zero iter number to resume training for a pre-trained net.
+  // 迭代入口，其中会调用Step函数
   virtual void Solve(const char* resume_file = NULL);
   inline void Solve(const string resume_file) { Solve(resume_file.c_str()); }
+  // 迭代iters步
   void Step(int iters);
   // The Restore method simply dispatches to one of the
   // RestoreSolverStateFrom___ protected methods. You should implement these
   // methods to restore the state from the appropriate snapshot type.
+  // 从快照重启
   void Restore(const char* resume_file);
   // The Solver::Snapshot function implements the basic snapshotting utility
   // that stores the learned net. You should implement the SnapshotSolverState()
   // function that produces a SolverState protocol buffer that needs to be
   // written to disk together with the learned net.
+  // 快照
   void Snapshot();
   virtual ~Solver() {}
   inline const SolverParameter& param() const { return param_; }
@@ -75,6 +80,7 @@ class Solver {
   int iter() const { return iter_; }
 
   // Invoked at specific points during an iteration
+  // 处于迭代中的哪一步
   class Callback {
    protected:
     virtual void on_start() = 0;
@@ -96,26 +102,33 @@ class Solver {
 
  protected:
   // Make and apply the update value for the current iteration.
+  // 更新参数，纯虚函数必须实现，继承后每个solver的更新方法不同
   virtual void ApplyUpdate() = 0;
   string SnapshotFilename(const string extension);
   string SnapshotToBinaryProto();
   string SnapshotToHDF5();
   // The test routine
+  // 测试网络
   void TestAll();
   void Test(const int test_net_id = 0);
+  // 纯虚函数，每种solver的快照和重启方式不一样
   virtual void SnapshotSolverState(const string& model_filename) = 0;
   virtual void RestoreSolverStateFromHDF5(const string& state_file) = 0;
   virtual void RestoreSolverStateFromBinaryProto(const string& state_file) = 0;
   void DisplayOutputBlobs(const int net_id);
   void UpdateSmoothedLoss(Dtype loss, int start_iter, int average_loss);
 
+  // solver参数
   SolverParameter param_;
+  // 迭代次数
   int iter_;
   int current_step_;
   shared_ptr<Net<Dtype> > net_;
   vector<shared_ptr<Net<Dtype> > > test_nets_;
   vector<Callback*> callbacks_;
+  // 存储滑动平均窗口期内的loss
   vector<Dtype> losses_;
+  // 滑动平均loss
   Dtype smoothed_loss_;
 
   // A function that can be set by a client of the Solver to provide indication
@@ -123,9 +136,11 @@ class Solver {
   ActionCallback action_request_function_;
 
   // True iff a request to stop early was received.
+  // 是否提前结束
   bool requested_early_exit_;
 
   // Timing information, handy to tune e.g. nbr of GPUs
+  // 计时器
   Timer iteration_timer_;
   float iterations_last_;
 

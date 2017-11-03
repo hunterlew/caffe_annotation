@@ -50,6 +50,7 @@ namespace caffe {
 template <typename Dtype>
 class Solver;
 
+// 类似LayerRegistry类
 template <typename Dtype>
 class SolverRegistry {
  public:
@@ -62,6 +63,7 @@ class SolverRegistry {
   }
 
   // Adds a creator.
+  // 注册
   static void AddCreator(const string& type, Creator creator) {
     CreatorRegistry& registry = Registry();
     CHECK_EQ(registry.count(type), 0)
@@ -70,6 +72,7 @@ class SolverRegistry {
   }
 
   // Get a solver using a SolverParameter.
+  // 调用creator指针指向的函数，该函数将以param为参数
   static Solver<Dtype>* CreateSolver(const SolverParameter& param) {
     const string& type = param.type();
     CreatorRegistry& registry = Registry();

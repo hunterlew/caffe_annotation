@@ -18,7 +18,7 @@ namespace caffe {
 //      stepvalue
 //    - poly: the effective learning rate follows a polynomial decay, to be
 //      zero by the max_iter. return base_lr (1 - iter/max_iter) ^ (power)
-//    - sigmoid: the effective learning rate follows a sigmod decay
+//    - sigmoid: the effective learning rate follows a sigmoid decay
 //      return base_lr ( 1/(1 + exp(-gamma * (iter - stepsize))))
 //
 // where base_lr, max_iter, gamma, step, stepvalue and power are defined
@@ -77,16 +77,19 @@ void SGDSolver<Dtype>::PreSolve() {
   }
 }
 
+// 用于防止梯度爆炸
 template <typename Dtype>
 void SGDSolver<Dtype>::ClipGradients() {
   const Dtype clip_gradients = this->param_.clip_gradients();
   if (clip_gradients < 0) { return; }
   const vector<Blob<Dtype>*>& net_params = this->net_->learnable_params();
   Dtype sumsq_diff = 0;
+  // 计算所有梯度的平方和
   for (int i = 0; i < net_params.size(); ++i) {
     sumsq_diff += net_params[i]->sumsq_diff();
   }
   const Dtype l2norm_diff = std::sqrt(sumsq_diff);
+  // 判断是否超过阈值
   if (l2norm_diff > clip_gradients) {
     Dtype scale_factor = clip_gradients / l2norm_diff;
     LOG(INFO) << "Gradient clipping: scaling down gradients (L2 norm "
@@ -98,6 +101,7 @@ void SGDSolver<Dtype>::ClipGradients() {
   }
 }
 
+// 更新参数
 template <typename Dtype>
 void SGDSolver<Dtype>::ApplyUpdate() {
   Dtype rate = GetLearningRate();
@@ -106,15 +110,18 @@ void SGDSolver<Dtype>::ApplyUpdate() {
         << ", lr = " << rate;
   }
   ClipGradients();
+  // 计算更新量v
   for (int param_id = 0; param_id < this->net_->learnable_params().size();
        ++param_id) {
     Normalize(param_id);
     Regularize(param_id);
     ComputeUpdateValue(param_id, rate);
   }
+  // 梯度下降，w := w - v
   this->net_->Update();
 }
 
+// 梯度归一化
 template <typename Dtype>
 void SGDSolver<Dtype>::Normalize(int param_id) {
   if (this->param_.iter_size() == 1) { return; }
@@ -141,6 +148,7 @@ void SGDSolver<Dtype>::Normalize(int param_id) {
   }
 }
 
+// 假如正则化
 template <typename Dtype>
 void SGDSolver<Dtype>::Regularize(int param_id) {
   const vector<Blob<Dtype>*>& net_params = this->net_->learnable_params();
@@ -154,11 +162,13 @@ void SGDSolver<Dtype>::Regularize(int param_id) {
     if (local_decay) {
       if (regularization_type == "L2") {
         // add weight decay
+        // 代价函数中(1/2)*lambda*(w^2)，求导->lambda*w
         caffe_axpy(net_params[param_id]->count(),
             local_decay,
             net_params[param_id]->cpu_data(),
             net_params[param_id]->mutable_cpu_diff());
       } else if (regularization_type == "L1") {
+        //  绝对值，求导需要先判断正负
         caffe_cpu_sign(net_params[param_id]->count(),
             net_params[param_id]->cpu_data(),
             temp_[param_id]->mutable_cpu_data());
@@ -213,11 +223,13 @@ template <typename Dtype>
 void SGDSolver<Dtype>::ComputeUpdateValue(int param_id, Dtype rate) {
   const vector<Blob<Dtype>*>& net_params = this->net_->learnable_params();
   const vector<float>& net_params_lr = this->net_->params_lr();
+  // 动量系数
   Dtype momentum = this->param_.momentum();
   Dtype local_rate = rate * net_params_lr[param_id];
   // Compute the update to history, then copy it to the parameter diff.
   switch (Caffe::mode()) {
   case Caffe::CPU: {
+    // 计算动量历史同时保存到history_中
     caffe_cpu_axpby(net_params[param_id]->count(), local_rate,
               net_params[param_id]->cpu_diff(), momentum,
               history_[param_id]->mutable_cpu_data());

@@ -53,6 +53,7 @@ void Net<Dtype>::Init(const NetParameter& in_param) {
   NetParameter filtered_param;
   // 可以选择加入或丢弃一些层，默认都是加入的。最后赋给filtered_param
   FilterNet(in_param, &filtered_param);
+  // 加载网络参数，并打印出来（根据prototxt内容）
   LOG_IF(INFO, Caffe::root_solver())
       << "Initializing net from parameters: " << std::endl
       << filtered_param.DebugString();

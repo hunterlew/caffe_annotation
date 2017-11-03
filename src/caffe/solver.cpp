@@ -41,6 +41,7 @@ Solver<Dtype>::Solver(const string& param_file)
 
 template <typename Dtype>
 void Solver<Dtype>::Init(const SolverParameter& param) {
+  // 加载solver参数，并打印出来（根据prototxt内容）
   LOG_IF(INFO, Caffe::root_solver()) << "Initializing solver from parameters: "
     << std::endl << param.DebugString();
   param_ = param;
@@ -50,6 +51,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
     Caffe::set_random_seed(param_.random_seed() + Caffe::solver_rank());
   }
   // Scaffolding code
+  // 加载训练网络和测试网络
   InitTrainNet();
   InitTestNets();
   if (Caffe::root_solver()) {
@@ -69,6 +71,7 @@ void Solver<Dtype>::InitTrainNet() {
   CHECK_LE(num_train_nets, 1) << "SolverParameter must not contain more than "
       << "one of these fields specifying a train_net: " << field_names;
   NetParameter net_param;
+  // 读取训练网络参数
   if (param_.has_train_net_param()) {
     LOG_IF(INFO, Caffe::root_solver())
         << "Creating training net specified in train_net_param.";
@@ -92,11 +95,13 @@ void Solver<Dtype>::InitTrainNet() {
   // precedence); then, merge in any NetState specified by the net_param itself;
   // finally, merge in any NetState specified by the train_state (highest
   // precedence).
+  // 设置正确的stage：train or test
   NetState net_state;
   net_state.set_phase(TRAIN);
   net_state.MergeFrom(net_param.state());
   net_state.MergeFrom(param_.train_state());
   net_param.mutable_state()->CopyFrom(net_state);
+  // 构建训练网络
   net_.reset(new Net<Dtype>(net_param));
 }
 
@@ -176,9 +181,12 @@ void Solver<Dtype>::InitTestNets() {
   }
 }
 
+// 迭代的具体实现
 template <typename Dtype>
 void Solver<Dtype>::Step(int iters) {
+  // 起点次数
   const int start_iter = iter_;
+  // 终点次数
   const int stop_iter = iter_ + iters;
   int average_loss = this->param_.average_loss();
   losses_.clear();
@@ -187,10 +195,12 @@ void Solver<Dtype>::Step(int iters) {
 
   while (iter_ < stop_iter) {
     // zero-init the params
+    // 每次迭代都清空误差
     net_->ClearParamDiffs();
     if (param_.test_interval() && iter_ % param_.test_interval() == 0
         && (iter_ > 0 || param_.test_initialization())) {
       if (Caffe::root_solver()) {
+        // 测试
         TestAll();
       }
       if (requested_early_exit_) {
@@ -206,13 +216,17 @@ void Solver<Dtype>::Step(int iters) {
     net_->set_debug_info(display && param_.debug_info());
     // accumulate the loss and gradient
     Dtype loss = 0;
+    // 遍历各个batch计算loss
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward();
     }
+    // 平均一下
     loss /= param_.iter_size();
     // average the loss across iterations for smoothed reporting
+    // 平滑一下
     UpdateSmoothedLoss(loss, start_iter, average_loss);
     if (display) {
+      // 显示当前迭代次数和损失值
       float lapse = iteration_timer_.Seconds();
       float per_s = (iter_ - iterations_last_) / (lapse ? lapse : 1);
       LOG_IF(INFO, Caffe::root_solver()) << "Iteration " << iter_
@@ -243,6 +257,7 @@ void Solver<Dtype>::Step(int iters) {
     for (int i = 0; i < callbacks_.size(); ++i) {
       callbacks_[i]->on_gradients_ready();
     }
+    // 更新参数，各种solver不一样
     ApplyUpdate();
 
     // Increment the internal iter_ counter -- its value should always indicate
@@ -266,6 +281,7 @@ void Solver<Dtype>::Step(int iters) {
   }
 }
 
+// 迭代入口，会调用step实现具体的前向后向
 template <typename Dtype>
 void Solver<Dtype>::Solve(const char* resume_file) {
   CHECK(Caffe::root_solver());
@@ -275,6 +291,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   // Initialize to false every time we start solving.
   requested_early_exit_ = false;
 
+  // 从某个之前训练到一半的文件重启继续训练
   if (resume_file) {
     LOG(INFO) << "Restoring previous solver status from " << resume_file;
     Restore(resume_file);
@@ -283,9 +300,11 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   // For a network that is trained by the solver, no bottom or top vecs
   // should be given, and we will just provide dummy vecs.
   int start_iter = iter_;
+  // 调用step
   Step(param_.max_iter() - iter_);
   // If we haven't already, save a snapshot after optimization, unless
   // overridden by setting snapshot_after_train := false
+  // 结束优化的时候默认会留一次快照
   if (param_.snapshot_after_train()
       && (!param_.snapshot() || iter_ % param_.snapshot() != 0)) {
     Snapshot();
@@ -300,6 +319,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   // training, for the train net we only run a forward pass as we've already
   // updated the parameters "max_iter" times -- this final pass is only done to
   // display the loss, which is computed in the forward pass.
+  // 结束优化的时候再做一次前向
   if (param_.display() && iter_ % param_.display() == 0) {
     int average_loss = this->param_.average_loss();
     Dtype loss;
@@ -315,6 +335,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
   LOG(INFO) << "Optimization Done.";
 }
 
+// 测试所有网络
 template <typename Dtype>
 void Solver<Dtype>::TestAll() {
   for (int test_net_id = 0;
@@ -324,6 +345,7 @@ void Solver<Dtype>::TestAll() {
   }
 }
 
+// 测试一个网络
 template <typename Dtype>
 void Solver<Dtype>::Test(const int test_net_id) {
   CHECK(Caffe::root_solver());
@@ -435,12 +457,14 @@ void Solver<Dtype>::CheckSnapshotWritePermissions() {
   }
 }
 
+// 快照名称
 template <typename Dtype>
 string Solver<Dtype>::SnapshotFilename(const string extension) {
   return param_.snapshot_prefix() + "_iter_" + caffe::format_int(iter_)
     + extension;
 }
 
+// 二进制格式
 template <typename Dtype>
 string Solver<Dtype>::SnapshotToBinaryProto() {
   string model_filename = SnapshotFilename(".caffemodel");
@@ -451,6 +475,7 @@ string Solver<Dtype>::SnapshotToBinaryProto() {
   return model_filename;
 }
 
+// hdf5格式
 template <typename Dtype>
 string Solver<Dtype>::SnapshotToHDF5() {
   string model_filename = SnapshotFilename(".caffemodel.h5");
@@ -459,6 +484,7 @@ string Solver<Dtype>::SnapshotToHDF5() {
   return model_filename;
 }
 
+// 从快照重启接着训练
 template <typename Dtype>
 void Solver<Dtype>::Restore(const char* state_file) {
   string state_filename(state_file);
@@ -470,6 +496,7 @@ void Solver<Dtype>::Restore(const char* state_file) {
   }
 }
 
+// 平滑loss，采用滑动平均的方法
 template <typename Dtype>
 void Solver<Dtype>::UpdateSmoothedLoss(Dtype loss, int start_iter,
     int average_loss) {

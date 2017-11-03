@@ -24,12 +24,19 @@ class SGDSolver : public Solver<Dtype> {
   const vector<shared_ptr<Blob<Dtype> > >& history() { return history_; }
 
  protected:
+  // 初始化history_, update_, temp_
   void PreSolve();
+  // 返回当前学习率
   Dtype GetLearningRate();
+  // 更新参数
   virtual void ApplyUpdate();
+  // 归一化
   virtual void Normalize(int param_id);
+  // 正则化
   virtual void Regularize(int param_id);
+  // 计算动量形式随机梯度下降的参数更新量v
   virtual void ComputeUpdateValue(int param_id, Dtype rate);
+  // 判断梯度是否超过阈值，用于防止梯度爆炸（常用rnn、lstm中）
   virtual void ClipGradients();
   virtual void SnapshotSolverState(const string& model_filename);
   virtual void SnapshotSolverStateToBinaryProto(const string& model_filename);
@@ -40,6 +47,7 @@ class SGDSolver : public Solver<Dtype> {
   // update maintains update related data and is not needed in snapshots.
   // temp maintains other information that might be needed in computation
   //   of gradients/updates and is not needed in snapshots
+  // history_为动量历史
   vector<shared_ptr<Blob<Dtype> > > history_, update_, temp_;
 
   DISABLE_COPY_AND_ASSIGN(SGDSolver);
