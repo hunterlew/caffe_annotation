@@ -73,6 +73,7 @@ void WriteProtoToBinaryFile(const Message& proto, const char* filename) {
 cv::Mat ReadImageToCVMat(const string& filename,
     const int height, const int width, const bool is_color) {
   cv::Mat cv_img;
+  // 区分彩色和灰度图像，分别得到三通道和单通道
   int cv_read_flag = (is_color ? CV_LOAD_IMAGE_COLOR :
     CV_LOAD_IMAGE_GRAYSCALE);
   cv::Mat cv_img_origin = cv::imread(filename, cv_read_flag);
@@ -80,6 +81,7 @@ cv::Mat ReadImageToCVMat(const string& filename,
     LOG(ERROR) << "Could not open or find file " << filename;
     return cv_img_origin;
   }
+  //resize大小
   if (height > 0 && width > 0) {
     cv::resize(cv_img_origin, cv_img, cv::Size(width, height));
   } else {
