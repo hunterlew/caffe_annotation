@@ -105,14 +105,14 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
     }
   }
 
-  // 逐点计算变换
+  // 每张图像逐点计算变换
   Dtype datum_element;
   int top_index, data_index;
   for (int c = 0; c < datum_channels; ++c) {
     for (int h = 0; h < height; ++h) {
       for (int w = 0; w < width; ++w) {
-        // data_index：对应到未裁剪的原图中的索引
-        // top_index：裁剪后输出的索引
+        // data_index：对应到未裁剪的原图中的数据点索引
+        // top_index：裁剪后输出的数据点索引
         data_index = (c * datum_height + h_off + h) * datum_width + w_off + w;
         if (do_mirror) {
           // （水平）镜像
@@ -127,7 +127,7 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
         } else {
           datum_element = datum.float_data(data_index);
         }
-        // 取均值后再计算缩放
+        // 取全局均值后再计算缩放
         // 均值按照data_index计算，因为均值是未裁剪的大小
         if (has_mean_file) {
           transformed_data[top_index] =
@@ -143,6 +143,13 @@ void DataTransformer<Dtype>::Transform(const Datum& datum,
       }
     }
   }
+  // 2017.11.13: hunterlew补充，求单张图片的均值，使输入为零均值
+  Dtype self_mean = 0;
+  for (int i = 0; i < datum_channels * height * width; i++)
+    self_mean += transformed_data[i];
+  self_mean /= datum_channels * height * width;
+  for (int i = 0; i < datum_channels * height * width; i++)
+    transformed_data[i] -= self_mean;
 }
 
 
